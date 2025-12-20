@@ -5,14 +5,9 @@ from data_structures import Point
 
 def get_path_to_point(start: Point, target: Point, game_map, ignore_danger=False):
     if not game_map.is_valid(target.x, target.y): return None
-
-    # Оптимизация: Если цель слишком далеко, используем простую эвристику (Manhattan)
-    # Но для начала просто увеличим лимит
     queue = deque([(start, [])])
     visited = {(start.x, start.y)}
-
-    # --- FIX: Увеличиваем лимит шагов для больших карт ---
-    max_depth = 300
+    max_depth = 600  # MAX VISION
 
     while queue:
         current, path = queue.popleft()
@@ -40,7 +35,7 @@ def find_nearest_safe_tile(start: Point, game_map):
         current, path = queue.popleft()
         if game_map.is_safe(current.x, current.y) and len(path) > 0:
             return path
-        if len(path) > 20: continue  # Чуть увеличили поиск спасения
+        if len(path) > 30: continue
 
         for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
             nx, ny = current.x + dx, current.y + dy
@@ -59,8 +54,8 @@ def find_best_bombing_spot(start: Point, game_map, bomb_range, reserved_cells):
     queue = deque([(start, [])])
     visited = {(start.x, start.y)}
 
-    # Если ящиков нет, ищем очень далеко (чтобы найти врага)
-    max_steps = 100 if game_map.total_boxes < 5 else 20
+    # Ищем ящики по ВСЕЙ карте (если рядом нет, ищем далеко)
+    max_steps = 25 if game_map.total_boxes > 50 else 150
 
     while queue:
         current, path = queue.popleft()
@@ -68,7 +63,9 @@ def find_best_bombing_spot(start: Point, game_map, bomb_range, reserved_cells):
         if (current.x, current.y) not in reserved_cells:
             dist = len(path)
             score = game_map.calculate_potential_score(current.x, current.y, bomb_range, dist)
+
             if score > 0:
+                # Ценность: (Очки^2) / (Дистанция + 1)
                 value = (score ** 2) / (dist + 2)
                 if value > best_value:
                     best_value = value

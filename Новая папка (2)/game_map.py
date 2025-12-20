@@ -12,8 +12,6 @@ class GameMap:
         self.bombs = []
         self.enemies = []
         self.obstacles = set()
-
-        # ВАЖНО: Атрибут для хранения позиций союзников
         self.ally_positions = set()
 
         self._parse_arena(state_json['arena'])
@@ -46,18 +44,16 @@ class GameMap:
                 self.ally_positions.add((b['pos'][0], b['pos'][1]))
 
     def _calculate_danger_zones(self):
-        # 1. Бомбы
         for bomb in self.bombs:
             self.register_virtual_bomb(bomb.pos.x, bomb.pos.y, bomb.range)
-        # 2. Враги (Держим дистанцию)
         for enemy in self.enemies:
             for dx in [-1, 0, 1]:
                 for dy in [-1, 0, 1]:
+                    if dx == 0 and dy == 0: continue
                     nx, ny = enemy.pos.x + dx, enemy.pos.y + dy
                     if self.is_valid(nx, ny): self.danger_grid[ny][nx] = 1
 
     def register_virtual_bomb(self, x, y, bomb_range):
-        """Помечает зоны опасности от бомбы. Используется и при старте, и при планировании."""
         self._mark_danger(x, y)
         for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
             for r in range(1, bomb_range + 1):
@@ -74,7 +70,7 @@ class GameMap:
 
     def is_walkable(self, x, y):
         if not self.is_valid(x, y): return False
-        return self.grid[y][x] == 0  # Только по пустому
+        return self.grid[y][x] == 0
 
     def is_safe(self, x, y):
         if not self.is_valid(x, y): return False
@@ -83,8 +79,9 @@ class GameMap:
     def calculate_potential_score(self, x, y, bomb_range, dist):
         score = 0
         boxes = 0
-        # Агрессивность зависит от стадии игры
-        enemy_value = 10 if self.total_boxes > 20 else 50
+        enemy_value = 20
+        # Если ящиков 0 - убиваем всех
+        if self.total_boxes == 0: enemy_value = 1000
 
         for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
             for r in range(1, bomb_range + 1):
@@ -92,11 +89,14 @@ class GameMap:
                 if not self.is_valid(nx, ny) or self.grid[ny][nx] == 1: break
 
                 cell = self.grid[ny][nx]
-                if cell == 2:  # Ящик
+                if cell == 2:  # Box
                     boxes += 1
-                    score += min(boxes, 4) * 2
+                    # V12: Ящики это золото
+                    score += 5 + (boxes * 3)
                     break
-                if cell == 4:  # Враг
-                    if dist <= 6: score += enemy_value
+
+                if cell == 4:  # Enemy
+                    if dist <= 8: score += enemy_value
+
                 if cell == 3: score += 1; break
         return score

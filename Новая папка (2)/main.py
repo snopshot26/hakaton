@@ -1,4 +1,3 @@
-# main.py
 import time
 import traceback
 from api_client import ApiClient
@@ -12,6 +11,7 @@ CURRENT_STATS = {
     "bomb_range": 1,
     "speed": 2,
     "max_bombs": 1,
+    "bomb_timer": 1,  # Уровень улучшения таймера
     "points": 0
 }
 
@@ -34,37 +34,67 @@ def handle_boosters(client):
             new_range = state.get("bomb_range", 1)
             old_speed = CURRENT_STATS["speed"]
             new_speed = state.get("speed", 2)
+            old_bombs = CURRENT_STATS.get("max_bombs", 1)
+            new_bombs = state.get("bombs", 1)
+            old_timer = CURRENT_STATS.get("bomb_timer", 1)
+            new_timer = state.get("bomb_timer", 1)  # Проверяем, как API отдает таймер
 
-            if new_range > old_range: print(f"⚡ UPGRADE: RADIUS {old_range} -> {new_range}")
-            if new_speed > old_speed: print(f"⚡ UPGRADE: SPEED {old_speed} -> {new_speed}")
+            if new_range > old_range: print(f"⚡ UPGRADE: 🔥 RADIUS {old_range} -> {new_range}")
+            if new_speed > old_speed: print(f"⚡ UPGRADE: 👟 SPEED {old_speed} -> {new_speed}")
+            if new_bombs > old_bombs: print(f"⚡ UPGRADE: 💣 AMMO {old_bombs} -> {new_bombs}")
+            if new_timer > old_timer: print(f"⚡ UPGRADE: ⏱️ TIMER {old_timer} -> {new_timer}")
 
             CURRENT_STATS["bomb_range"] = new_range
             CURRENT_STATS["speed"] = new_speed
-            CURRENT_STATS["max_bombs"] = state.get("bombs", 1)
+            CURRENT_STATS["max_bombs"] = new_bombs
+            CURRENT_STATS["bomb_timer"] = new_timer
             points = state.get("points", 0)
             CURRENT_STATS["points"] = points
 
             bought = False
+
+            # --- ПРИОРИТЕТ ЗАКУПКИ V16.1 ---
+
+            # 1. База (чтобы фармить)
             if not bought and CURRENT_STATS["bomb_range"] < 3 and points >= 1:
-                if client.buy_booster("bomb_range"): bought = True; print("🛒 BUY: RADIUS")
+                if client.buy_booster("bomb_range"): bought = True; print("🛒 BUY: 🔥 RADIUS")
 
+            # 2. Скорость (чтобы жить)
             if not bought and CURRENT_STATS["speed"] < 3 and points >= 1:
-                if client.buy_booster("speed"): bought = True; print("🛒 BUY: SPEED")
+                if client.buy_booster("speed"): bought = True; print("🛒 BUY: 👟 SPEED")
 
-            if not bought and CURRENT_STATS["max_bombs"] < 2 and points >= 1:
-                if client.buy_booster("bombs"): bought = True; print("🛒 BUY: AMMO")
+            # 3. ТАЙМЕР (Ускорение фарма!) - Вместо брони
+            # Покупаем до 3 уровня, чтобы взрывалось быстро, но мы успевали убежать
+            if not bought and CURRENT_STATS["bomb_timer"] < 3 and points >= 1:
+                # Примечание: Проверь точное название бустера в API. Обычно это "bomb_timer" или "rc".
+                # Если не сработает, код просто пропустит.
+                if client.buy_booster("bomb_timer"): bought = True; print("🛒 BUY: ⏱️ TIMER")
 
-            if not bought and CURRENT_STATS["bomb_range"] < 5 and points >= 1:
-                if client.buy_booster("bomb_range"): bought = True; print("🛒 BUY: RADIUS MAX")
+            # 4. Количество бомб (для цепочек)
+            if not bought and CURRENT_STATS["max_bombs"] < 3 and points >= 1:
+                if client.buy_booster("bombs"): bought = True; print("🛒 BUY: 💣 AMMO")
+
+            # 5. Максимум всего остального
+            if not bought and points >= 1:
+                if client.buy_booster("bomb_range"):
+                    bought = True;
+                    print("🛒 BUY: RADIUS MAX")
+                elif client.buy_booster("speed"):
+                    bought = True;
+                    print("🛒 BUY: SPEED MAX")
+                elif client.buy_booster("bombs"):
+                    bought = True;
+                    print("🛒 BUY: AMMO MAX")
 
         LAST_BOOSTER_UPDATE = time.time()
-    except Exception:
+    except Exception as e:
+        # print(f"Booster err: {e}")
         pass
 
 
 def main():
     print("==========================================")
-    print("🚀 DATSJINGLEBANG BOT: FINAL V10")
+    print("🚀 DATSJINGLEBANG BOT: BULLDOZER v16.1 (FAST FUSE)")
     print("==========================================")
 
     client = ApiClient(BASE_URL)
@@ -96,20 +126,16 @@ def main():
             bombs_placed_this_tick = []
 
             for b in my_bombers: reserved_cells.add((b.pos.x, b.pos.y))
+
+            # Сортировка: агрессоры первыми
             my_bombers.sort(key=lambda b: b.bombs_available, reverse=True)
 
             print(
-                f"--- TICK (R:{CURRENT_STATS['bomb_range']} | S:{CURRENT_STATS['speed']} | Box:{game_map.total_boxes}) ---")
+                f"--- TICK (R:{CURRENT_STATS['bomb_range']} | T:{CURRENT_STATS['bomb_timer']} | Box:{game_map.total_boxes}) ---")
 
             for bomber in my_bombers:
-                # ВАЖНО: передаем my_bombers
                 path, bombs, log = strategy.get_bomber_action(
-                    bomber,
-                    game_map,
-                    my_bombers,
-                    CURRENT_STATS["bomb_range"],
-                    reserved_cells,
-                    bombs_placed_this_tick
+                    bomber, game_map, my_bombers, CURRENT_STATS["bomb_range"], reserved_cells, bombs_placed_this_tick
                 )
 
                 print(f"🤖 {bomber.id.split('-')[0]} [{bomber.pos.x},{bomber.pos.y}]: {log}")

@@ -1,17 +1,13 @@
 # data_structures.py
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import List
 
 @dataclass(eq=True, frozen=True)
 class Point:
     x: int
     y: int
-
-    def to_list(self) -> List[int]:
-        return [self.x, self.y]
-
-    def dist_manhattan(self, other: 'Point') -> int:
-        return abs(self.x - other.x) + abs(self.y - other.y)
+    def to_list(self) -> List[int]: return [self.x, self.y]
+    def dist_manhattan(self, other: 'Point') -> int: return abs(self.x - other.x) + abs(self.y - other.y)
 
 @dataclass
 class Bomb:
@@ -25,6 +21,7 @@ class Bomber:
     pos: Point
     alive: bool
     bombs_available: int
+    role: str = "miner" # 'miner', 'hunter', 'scout'
 
 @dataclass
 class Enemy:

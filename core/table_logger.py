@@ -49,7 +49,8 @@ def get_bomber_action(bomber: Bomber, path_length: int = 0) -> str:
     return "idle"
 
 
-def log_game_table(state: GameState, path_lengths: dict = None):
+def log_game_table(state: GameState, path_lengths: dict = None, bomber_states: dict = None, 
+                  role_manager=None, farm_controller=None):
     """
     Print game state as a formatted table
     
@@ -72,10 +73,31 @@ def log_game_table(state: GameState, path_lengths: dict = None):
         bomber_state = get_bomber_state(bomber)
         pos_str = format_position(bomber.position)
         target_str = format_target(bomber.target)
-        path_len = path_lengths.get(bomber.id, 0)
+        path_len = path_lengths.get(bomber.id, 0) if path_lengths else 0
         action_str = get_bomber_action(bomber, path_len)
         
-        row = f"{bomber_id:<10} | {bomber_state:<8} | {pos_str:<12} | {target_str:<12} | {action_str:<20}"
+        # Add role and tactical state if available
+        role_info = ""
+        tactical_info = ""
+        if role_manager:
+            from core.roles import BomberRole
+            role = role_manager.get_role(bomber.id)
+            role_info = f" {role.value}"
+        
+        if bomber_states and bomber.id in bomber_states:
+            tactical_state = bomber_states[bomber.id]
+            tactical_info = f" [{tactical_state.state.value}]"
+            if tactical_state.last_farm_pos:
+                target_str = format_target(tactical_state.last_farm_pos)
+        
+        # Add farm score if available
+        score_info = ""
+        if farm_controller:
+            score = farm_controller.get_farm_score(bomber.id)
+            if score > 0:
+                score_info = f" score={score:.0f}"
+        
+        row = f"{bomber_id:<10} | {bomber_state:<8} | {pos_str:<12} | {target_str:<12} | {action_str:<20}{role_info}{tactical_info}{score_info}"
         rows.append(row)
     
     # Combine all parts

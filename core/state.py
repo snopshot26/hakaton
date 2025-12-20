@@ -78,16 +78,28 @@ class GameState:
             tuple(obs) for obs in arena.get("obstacles", [])
         ]
         
-        # Calculate explosion positions from active bombs
+        # Calculate explosion positions from active bombs (cross pattern)
         bombs = arena.get("bombs", [])
+        walls = [tuple(w) for w in arena.get("walls", [])]
         explosions = []
         for bomb in bombs:
-            bomb_pos = bomb.get("pos", [0, 0])
+            bomb_pos_data = bomb.get("pos", [0, 0])
+            bomb_pos = tuple(bomb_pos_data) if isinstance(bomb_pos_data, list) else (0, 0)
             bomb_range = bomb.get("range", 1)
-            # Add bomb position and explosion range positions (cross pattern)
-            explosions.append(tuple(bomb_pos))
-            # Add positions in cross pattern (simplified - just the bomb position for now)
-            # Full explosion calculation would need to account for obstacles blocking
+            
+            # Add bomb position
+            explosions.append(bomb_pos)
+            
+            # Add explosion positions in cross pattern
+            x, y = bomb_pos
+            directions = [(0, -1), (0, 1), (-1, 0), (1, 0)]
+            for dx, dy in directions:
+                for r in range(1, bomb_range + 1):
+                    exp_pos = (x + dx * r, y + dy * r)
+                    # Stop if hit wall
+                    if exp_pos in walls:
+                        break
+                    explosions.append(exp_pos)
         
         enemies = [
             tuple(enemy.get("pos", [0, 0])) for enemy in data.get("enemies", [])

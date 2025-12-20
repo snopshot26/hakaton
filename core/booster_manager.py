@@ -17,7 +17,9 @@ class BoosterManager:
         self.api_client = api_client
         self.cooldown_seconds = cooldown_seconds
         self.last_attempt_time = 0.0
+        self.last_attempt_tick = 0
         self.last_attempt_failed = False
+        self.last_points = 0
     
     def fetch_boosters(self) -> Optional[BoosterState]:
         """Fetch available boosters from API"""
@@ -54,7 +56,7 @@ class BoosterManager:
         
         return True
     
-    def try_purchase_booster(self, booster_state: BoosterState) -> bool:
+    def try_purchase_booster(self, booster_state: BoosterState, current_tick: int = 0) -> bool:
         """
         Attempt to purchase a booster
         
@@ -72,24 +74,43 @@ class BoosterManager:
         if not booster_state.available:
             return False
         
+        # Only attempt if points increased (new skill point available)
+        if booster_state.points <= self.last_points:
+            return False
+        
+        # Rate limit: don't attempt too frequently
+        if current_tick > 0 and (current_tick - self.last_attempt_tick) < 20:
+            return False
+        
         # Try to purchase in priority order
         priority = self._get_booster_priority()
         
         for booster_name in priority:
             booster_index = self._find_booster_index(booster_name, booster_state.available)
             if booster_index is not None:
+                # Check if we can afford it
+                booster_cost = booster_state.available[booster_index].get("cost", 1)
+                if booster_state.points < booster_cost:
+                    continue
+                
                 # Attempt purchase
                 self.last_attempt_time = get_current_time()
+                self.last_attempt_tick = current_tick
                 response = self.api_client.post_booster(booster_index)
                 
                 if response:
-                    logger.booster(f"Purchased {booster_name} (index {booster_index})")
+                    logger.booster(f"Purchased {booster_name} (index {booster_index}, cost {booster_cost})")
                     self.last_attempt_failed = False
+                    self.last_points = booster_state.points - booster_cost
                     return True
                 else:
                     logger.booster(f"Failed to purchase {booster_name} (index {booster_index})")
                     self.last_attempt_failed = True
+                    self.last_points = booster_state.points  # Update even on failure
                     return True  # Attempt was made, even if failed
+        
+        # Update points even if no purchase made
+        self.last_points = booster_state.points
         
         # No booster found in priority list
         return False
